@@ -1,0 +1,38 @@
+name: Deploy CodeMentor
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+        env:
+          REACT_APP_API_URL: ${{ secrets.AWS_API_ENDPOINT }}
+
+      - name: Deploy to AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: S3 Sync (Frontend)
+        run: aws s3 sync frontend/build/ s3://${{ secrets.S3_BUCKET_NAME }} --delete
+
+      - name: Lambda Update (Backend)
+        run: |
+          cd backend
+          npm install --production
+          zip -r func.zip .
+          aws lambda update-function-code --function-name CodeMentorBackend --zip-file fileb://func.zip
